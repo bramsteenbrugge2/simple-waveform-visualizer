@@ -1,0 +1,256 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:;"
+    />
+    <title>Waveform Visualizer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- ============ CONFIG SCREEN ============ -->
+    <section id="config">
+      <div class="config-card">
+        <header class="config-head">
+          <h1>Waveform Visualizer</h1>
+          <p class="sub">Configure, then press <kbd>Start</kbd> to record full screen.</p>
+        </header>
+
+        <div class="grid">
+          <!-- Recording -->
+          <fieldset>
+            <legend>Recording</legend>
+
+            <label class="row">
+              <span>Duration</span>
+              <span class="inline">
+                <input id="f-duration" type="number" min="1" step="1" />
+                <span class="unit">sec</span>
+                <span id="f-duration-pretty" class="pretty"></span>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Audio input</span>
+              <span class="inline grow">
+                <select id="f-device" class="grow"></select>
+                <button id="f-refresh" type="button" class="ghost" title="Refresh device list">↻</button>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Audio output</span>
+              <select id="f-output" class="grow"></select>
+            </label>
+
+            <label class="row">
+              <span>Channels</span>
+              <select id="f-channels">
+                <option value="1">Mono</option>
+                <option value="2">Stereo</option>
+              </select>
+            </label>
+
+            <label class="row">
+              <span>Sample rate</span>
+              <select id="f-samplerate">
+                <option value="0">Device default</option>
+                <option value="44100">44100 Hz</option>
+                <option value="48000">48000 Hz</option>
+              </select>
+            </label>
+          </fieldset>
+
+          <!-- Waveform -->
+          <fieldset>
+            <legend>Waveform</legend>
+
+            <label class="row">
+              <span>Style</span>
+              <select id="f-style">
+                <option value="glowLine">Symmetric glow line</option>
+                <option value="filledGradient">Filled gradient</option>
+                <option value="bars">Discrete bars</option>
+              </select>
+            </label>
+
+            <label class="row">
+              <span>Color</span>
+              <input id="f-color" type="color" />
+            </label>
+
+            <label class="row">
+              <span>Glow</span>
+              <span class="inline grow">
+                <input id="f-glow" type="range" min="0" max="60" step="1" class="grow" />
+                <span id="f-glow-val" class="val"></span>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Line width</span>
+              <span class="inline grow">
+                <input id="f-linewidth" type="range" min="0.5" max="8" step="0.5" class="grow" />
+                <span id="f-linewidth-val" class="val"></span>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Amplitude</span>
+              <span class="inline grow">
+                <input id="f-amp" type="range" min="0.2" max="3" step="0.1" class="grow" />
+                <span id="f-amp-val" class="val"></span>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Smoothing</span>
+              <span class="inline grow">
+                <input id="f-smooth" type="range" min="0" max="1" step="0.02" class="grow" />
+                <span id="f-smooth-val" class="val"></span>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Compress</span>
+              <span class="inline grow">
+                <input id="f-compress" type="range" min="0" max="1" step="0.02" class="grow" />
+                <span id="f-compress-val" class="val"></span>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Headroom</span>
+              <span class="inline grow">
+                <input id="f-headroom" type="range" min="0.5" max="1" step="0.02" class="grow" />
+                <span id="f-headroom-val" class="val"></span>
+              </span>
+            </label>
+
+            <label class="row checkrow">
+              <span>Center baseline</span>
+              <input id="f-baseline" type="checkbox" />
+            </label>
+
+            <label class="row checkrow">
+              <span>Top half only</span>
+              <input id="f-single" type="checkbox" />
+            </label>
+          </fieldset>
+
+          <!-- Timer -->
+          <fieldset>
+            <legend>Timer</legend>
+
+            <label class="row checkrow">
+              <span>Show timer</span>
+              <input id="f-timershow" type="checkbox" />
+            </label>
+
+            <label class="row">
+              <span>Position</span>
+              <select id="f-timerpos">
+                <option value="top">Top</option>
+                <option value="center">Center</option>
+                <option value="bottom">Bottom</option>
+              </select>
+            </label>
+
+            <label class="row">
+              <span>Font size</span>
+              <span class="inline grow">
+                <input id="f-timersize" type="range" min="40" max="280" step="2" class="grow" />
+                <span id="f-timersize-val" class="val"></span>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Color</span>
+              <input id="f-timercolor" type="color" />
+            </label>
+
+            <label class="row checkrow">
+              <span>Show milliseconds</span>
+              <input id="f-ms" type="checkbox" />
+            </label>
+          </fieldset>
+
+          <!-- Output -->
+          <fieldset>
+            <legend>Output</legend>
+
+            <label class="row checkrow">
+              <span>Save WAV</span>
+              <input id="f-savewav" type="checkbox" />
+            </label>
+
+            <label class="row checkrow">
+              <span>Save waveform PNG</span>
+              <input id="f-savepng" type="checkbox" />
+            </label>
+
+            <div class="field-block">
+              <span class="field-label">Output folder</span>
+              <span class="inline full">
+                <input id="f-dir" type="text" class="grow" />
+                <button id="f-browse" type="button" class="ghost">Browse…</button>
+                <button id="f-open" type="button" class="ghost">Open</button>
+              </span>
+              <div id="f-dir-abs" class="path-hint"></div>
+            </div>
+
+            <label class="row">
+              <span>Filename prefix</span>
+              <input id="f-prefix" type="text" />
+            </label>
+
+            <label class="row checkrow">
+              <span>Subfolder per recording</span>
+              <input id="f-subfolder" type="checkbox" />
+            </label>
+
+            <label class="row">
+              <span>Background</span>
+              <input id="f-bg" type="color" />
+            </label>
+          </fieldset>
+        </div>
+
+        <div class="web-bar">
+          <label class="wb-item"><input id="f-web-enabled" type="checkbox" /> Web remote</label>
+          <label class="wb-item">Port <input id="f-web-port" type="number" min="1" max="65535" /></label>
+          <label class="wb-item"><input id="f-web-lan" type="checkbox" /> Allow LAN devices</label>
+          <span class="wb-label">Open on:</span>
+          <span id="web-urls" class="wb-urls">(starting…)</span>
+          <button id="web-open" type="button" class="ghost">Open in browser</button>
+        </div>
+
+        <footer class="config-foot">
+          <div class="foot-hint">
+            <kbd>Enter</kbd> Start &nbsp;·&nbsp; In recording: <kbd>Space</kbd> begin · <kbd>R</kbd> reset · <kbd>Esc</kbd> back · <kbd>Ctrl/⌘+Q</kbd> quit
+          </div>
+          <div class="foot-buttons">
+            <button id="btn-quit" type="button" class="ghost">Quit</button>
+            <button id="btn-save" type="button" class="ghost">Save settings</button>
+            <button id="btn-start" type="button" class="primary">Start ▶</button>
+          </div>
+        </footer>
+        <div id="toast" class="toast"></div>
+      </div>
+    </section>
+
+    <!-- ============ VISUALIZER SCREEN ============ -->
+    <section id="viz" hidden>
+      <canvas id="wave"></canvas>
+      <div id="device" class="overlay"></div>
+      <div id="rec" class="overlay"><span class="dot"></span>REC</div>
+      <div id="timer" class="overlay">00:00</div>
+      <div id="status" class="overlay"></div>
+      <div id="hint" class="overlay"></div>
+    </section>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,56 @@
+{
+  "name": "simple-waveform-visualizer",
+  "version": "1.0.0",
+  "description": "Full-screen live audio recording waveform visualizer with a countdown timer.",
+  "main": "src/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bramsteenbrugge2/simple-waveform-visualizer.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "devices": "electron . --list-devices",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "ci:build": "electron-builder --publish never"
+  },
+  "author": "Bram Steenbrugge <bram@bramsteenbrugge.be>",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "be.bram.wavevisualizer",
+    "productName": "Waveform Visualizer",
+    "files": [
+      "src/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.music",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "This app records audio so it can visualize and save the waveform."
+      }
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
+  }
+}

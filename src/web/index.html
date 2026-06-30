@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Waveform Remote</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Waveform Remote</h1>
+      <div id="statepill" class="statepill">Ready</div>
+      <div class="spacer"></div>
+      <button id="btn-start" class="primary">● Start</button>
+      <button id="btn-reset" class="ghost">Reset</button>
+      <button id="btn-gear" class="ghost icon" title="Settings">⚙</button>
+    </header>
+
+    <main>
+      <div class="bar">
+        <label class="field grow">
+          <span class="lbl">Recording</span>
+          <span class="row">
+            <select id="rec"></select>
+            <button id="refresh" class="ghost icon" title="Refresh list">↻</button>
+          </span>
+        </label>
+        <div id="meta" class="meta"></div>
+      </div>
+
+      <div class="stage">
+        <canvas id="wave"></canvas>
+        <div id="empty" class="empty">Pick a recording to see its waveform</div>
+      </div>
+
+      <div class="panel">
+        <label class="slider">
+          <span class="lbl">Height / gain</span>
+          <input id="amp" type="range" min="0.2" max="8" step="0.1" value="1" />
+          <span id="amp-val" class="val">1.0×</span>
+        </label>
+        <label class="slider">
+          <span class="lbl">Smoothing</span>
+          <input id="smooth" type="range" min="0" max="1" step="0.02" value="0" />
+          <span id="smooth-val" class="val">0%</span>
+        </label>
+        <label class="slider">
+          <span class="lbl">Compress</span>
+          <input id="compress" type="range" min="0" max="1" step="0.02" value="0" />
+          <span id="compress-val" class="val">0%</span>
+        </label>
+        <div class="actions">
+          <button id="play" class="primary">▶ Play</button>
+          <button id="loop" class="ghost">↻ Loop</button>
+          <label class="toggle"><input id="mirror" type="checkbox" checked /> Mirror to full screen</label>
+          <button id="export" class="ghost">Export PNG</button>
+          <button id="setdef" class="ghost">Set as app default</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- settings drawer -->
+    <div id="scrim" class="scrim"></div>
+    <aside id="settings" class="drawer">
+      <div class="drawer-head">
+        <h2>Settings</h2>
+        <button id="set-close" class="ghost icon">✕</button>
+      </div>
+      <div class="drawer-body">
+        <fieldset>
+          <legend>Recording</legend>
+          <label class="frow"><span>Duration (sec)</span><input id="s-duration" type="number" min="1" /></label>
+          <label class="frow"><span>Audio input</span>
+            <span class="frow-inline"><select id="s-device"></select><button id="s-devrefresh" class="ghost icon" title="Refresh">↻</button></span>
+          </label>
+          <label class="frow"><span>Audio output</span>
+            <span class="frow-inline"><select id="s-output"></select></span>
+          </label>
+          <label class="frow"><span>Channels</span>
+            <select id="s-channels"><option value="1">Mono</option><option value="2">Stereo</option></select>
+          </label>
+          <label class="frow"><span>Sample rate</span>
+            <select id="s-samplerate"><option value="0">Device default</option><option value="44100">44100 Hz</option><option value="48000">48000 Hz</option></select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Waveform</legend>
+          <label class="frow"><span>Style</span>
+            <select id="s-style"><option value="glowLine">Symmetric glow line</option><option value="filledGradient">Filled gradient</option><option value="bars">Discrete bars</option></select>
+          </label>
+          <label class="frow"><span>Color</span><input id="s-color" type="color" /></label>
+          <label class="frow"><span>Glow</span><input id="s-glow" type="range" min="0" max="60" step="1" /></label>
+          <label class="frow"><span>Line width</span><input id="s-linewidth" type="range" min="0.5" max="8" step="0.5" /></label>
+          <label class="frow"><span>Headroom</span><input id="s-headroom" type="range" min="0.5" max="1" step="0.02" /></label>
+          <label class="frow"><span>Center baseline</span><input id="s-baseline" type="checkbox" /></label>
+          <label class="frow"><span>Top half only</span><input id="s-single" type="checkbox" /></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Timer</legend>
+          <label class="frow"><span>Show timer</span><input id="s-timershow" type="checkbox" /></label>
+          <label class="frow"><span>Position</span>
+            <select id="s-timerpos"><option value="top">Top</option><option value="center">Center</option><option value="bottom">Bottom</option></select>
+          </label>
+          <label class="frow"><span>Font size</span><input id="s-timersize" type="range" min="40" max="280" step="2" /></label>
+          <label class="frow"><span>Color</span><input id="s-timercolor" type="color" /></label>
+          <label class="frow"><span>Show milliseconds</span><input id="s-ms" type="checkbox" /></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Output</legend>
+          <label class="frow"><span>Save WAV</span><input id="s-savewav" type="checkbox" /></label>
+          <label class="frow"><span>Save waveform PNG</span><input id="s-savepng" type="checkbox" /></label>
+          <label class="frow"><span>Output folder</span><input id="s-dir" type="text" /></label>
+          <label class="frow"><span>Filename prefix</span><input id="s-prefix" type="text" /></label>
+          <label class="frow"><span>Subfolder per recording</span><input id="s-subfolder" type="checkbox" /></label>
+          <label class="frow"><span>Background</span><input id="s-bg" type="color" /></label>
+        </fieldset>
+      </div>
+      <div class="drawer-foot">
+        <span class="foot-note">Changes apply live</span>
+      </div>
+    </aside>
+
+    <div id="toast" class="toast"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
