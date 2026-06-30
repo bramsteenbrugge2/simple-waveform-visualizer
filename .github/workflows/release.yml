@@ -24,10 +24,8 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Build installer
+        # macOS is ad-hoc signed (mac.identity "-"); no Developer ID / notarization
         run: npm run ci:build
-        env:
-          # no signing certificate configured — build unsigned
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.os }}

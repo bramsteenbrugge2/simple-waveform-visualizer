@@ -214,9 +214,17 @@ git push && git push --tags
 
 The workflow runs on `windows-latest` (builds the `.exe`) and `macos-latest`
 (builds the `.dmg`), then publishes a Release for the tag with both files
-attached. You can also run it manually from the Actions tab. The macOS build is
-**unsigned**, so first launch needs right-click → Open (or
-`xattr -dr com.apple.quarantine` on the `.app`).
+attached. You can also run it manually from the Actions tab.
+
+The macOS build is **ad-hoc signed** (no paid Apple Developer ID / notarization),
+so Gatekeeper still shows an "unidentified developer" warning on first launch —
+**right-click the app → Open**. If macOS instead says the app is *"damaged"*
+(can happen on Apple Silicon for downloaded unsigned apps), clear the quarantine
+flag once:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Waveform Visualizer.app"
+```
 
 ### LAN access (use the web remote from your phone)
 

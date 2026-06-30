@@ -1,6 +1,6 @@
 {
   "name": "simple-waveform-visualizer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Full-screen live audio recording waveform visualizer with a countdown timer.",
   "main": "src/main.js",
   "repository": {
@@ -44,7 +44,8 @@
         "dmg"
       ],
       "category": "public.app-category.music",
-      "hardenedRuntime": true,
+      "identity": "-",
+      "hardenedRuntime": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
