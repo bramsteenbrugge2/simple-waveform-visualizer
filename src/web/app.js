@@ -104,7 +104,7 @@ function drawWave(ctx, rawPeaks, W, H, wf, scale, smooth, comp, bg, sx) {
   const xOf = (b) => geoL + (n > 1 ? (b / (n - 1)) * geoW : 0);
   const ampAt = (b) => { let a = compressCurve(peaks[b], comp || 0) * scale * maxAmp; return a > maxAmp ? maxAmp : a; };
 
-  if (wf.showBaseline) {
+  if (wf.showBaseline && !single) {
     ctx.save(); ctx.globalAlpha = 0.12; ctx.strokeStyle = wf.color; ctx.lineWidth = Math.max(1, sx);
     ctx.beginPath(); ctx.moveTo(geoL, baseY); ctx.lineTo(geoL + geoW, baseY); ctx.stroke(); ctx.restore();
   }
@@ -145,8 +145,10 @@ function drawWave(ctx, rawPeaks, W, H, wf, scale, smooth, comp, bg, sx) {
     ctx.restore();
   } else {
     ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.shadowColor = wf.color; ctx.shadowBlur = wf.glow * sx; ctx.strokeStyle = wf.color;
-    ctx.lineWidth = (wf.centerLineWidth || 1.5) * sx; ctx.globalAlpha = 0.85;
-    ctx.beginPath(); ctx.moveTo(geoL, baseY); ctx.lineTo(xOf(Math.max(0, last)), baseY); ctx.stroke();
+    if (!single) {
+      ctx.lineWidth = (wf.centerLineWidth || 1.5) * sx; ctx.globalAlpha = 0.85;
+      ctx.beginPath(); ctx.moveTo(geoL, baseY); ctx.lineTo(xOf(Math.max(0, last)), baseY); ctx.stroke();
+    }
     ctx.globalAlpha = 1; ctx.lineWidth = (wf.lineWidth || 2.5) * sx;
     ctx.beginPath(); for (let b = 0; b <= last; b++) { const y = baseY - ampAt(b); b ? ctx.lineTo(xOf(b), y) : ctx.moveTo(xOf(b), y); } ctx.stroke();
     if (!single) { ctx.beginPath(); for (let b = 0; b <= last; b++) { const y = baseY + ampAt(b); b ? ctx.lineTo(xOf(b), y) : ctx.moveTo(xOf(b), y); } ctx.stroke(); }

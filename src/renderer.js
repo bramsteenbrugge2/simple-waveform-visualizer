@@ -350,7 +350,8 @@ function draw() {
   const baseY = regT + regH / 2;       // zero line stays centered (in the region)
   const maxAmp = (regH / 2) * wf.headroom;
 
-  if (wf.showBaseline) {
+  // no horizontal baseline in single-sided ("top half") mode — it reads as an underline
+  if (wf.showBaseline && !single) {
     g.save();
     g.globalAlpha = 0.12;
     g.strokeStyle = wf.color;
@@ -428,13 +429,15 @@ function drawGlow(baseY, maxAmp, last, single) {
   g.shadowBlur = wf.glow * dpr;
   g.strokeStyle = wf.color;
 
-  // bright zero line over the filled region
-  g.lineWidth = wf.centerLineWidth * dpr;
-  g.globalAlpha = 0.85;
-  g.beginPath();
-  g.moveTo(geoL, baseY);
-  g.lineTo(xOf(Math.max(0, last)), baseY);
-  g.stroke();
+  // bright zero line over the filled region (omitted in single-sided mode)
+  if (!single) {
+    g.lineWidth = wf.centerLineWidth * dpr;
+    g.globalAlpha = 0.85;
+    g.beginPath();
+    g.moveTo(geoL, baseY);
+    g.lineTo(xOf(Math.max(0, last)), baseY);
+    g.stroke();
+  }
 
   // top envelope (+ bottom mirror unless single-sided)
   g.globalAlpha = 1;
