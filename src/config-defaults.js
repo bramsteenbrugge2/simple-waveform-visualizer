@@ -51,6 +51,7 @@ module.exports = {
   // (e.g. positioned over a person's body in a projection). Values are 0..1 fractions.
   region: {
     enabled: false,
+    showOutline: false,   // draw the region's rectangle outline on the projection (for alignment)
     x: 0.3,
     y: 0.1,
     width: 0.4,

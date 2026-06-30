@@ -185,7 +185,7 @@ function recompute() {
 // ---------------- server I/O ----------------
 async function loadConfig() {
   try { const r = await fetch('/api/config'); const j = await r.json(); if (j.waveform) cfg = j; } catch (_) {}
-  if (!cfg.region) cfg.region = { enabled: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+  if (!cfg.region) cfg.region = { enabled: false, showOutline: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
   amplitude = (cfg.waveform && cfg.waveform.amplitudeScale) || 1;
   smoothing = (cfg.waveform && cfg.waveform.smoothing) || 0;
   compress = (cfg.waveform && cfg.waveform.compress) || 0;
@@ -323,7 +323,8 @@ function populateSettings() {
   sc('s-savewav', o.saveWav); sc('s-savepng', o.savePng); sv('s-dir', o.directory); sv('s-prefix', o.filenamePrefix); sc('s-subfolder', o.subfolderPerRecording);
   sv('s-bg', cfg.background);
   const rg = cfg.region || {};
-  sc('s-region', rg.enabled); sv('s-rx', rg.x != null ? rg.x : 0.3); sv('s-ry', rg.y != null ? rg.y : 0.1);
+  sc('s-region', rg.enabled); sc('s-region-outline', rg.showOutline);
+  sv('s-rx', rg.x != null ? rg.x : 0.3); sv('s-ry', rg.y != null ? rg.y : 0.1);
   sv('s-rw', rg.width != null ? rg.width : 0.4); sv('s-rh', rg.height != null ? rg.height : 0.8);
 }
 
@@ -361,6 +362,7 @@ function buildConfig() {
   out.output.subfolderPerRecording = $('s-subfolder').checked;
   out.region = out.region || {};
   out.region.enabled = $('s-region').checked;
+  out.region.showOutline = $('s-region-outline').checked;
   out.region.x = +$('s-rx').value;
   out.region.y = +$('s-ry').value;
   out.region.width = +$('s-rw').value;
@@ -394,7 +396,7 @@ function wireSettings() {
   const ids = ['s-duration', 's-device', 's-output', 's-channels', 's-samplerate', 's-style', 's-color', 's-glow',
     's-linewidth', 's-headroom', 's-baseline', 's-single', 's-timershow', 's-timerpos', 's-timersize',
     's-timercolor', 's-ms', 's-savewav', 's-savepng', 's-dir', 's-prefix', 's-subfolder', 's-bg',
-    's-region', 's-rx', 's-ry', 's-rw', 's-rh'];
+    's-region', 's-region-outline', 's-rx', 's-ry', 's-rw', 's-rh'];
   ids.forEach((id) => { const el = $(id); if (el) { el.addEventListener('input', applyLive); el.addEventListener('change', applyLive); } });
 }
 
@@ -454,6 +456,7 @@ function updateTransport() {
 
 function updateRegionBtn() {
   $('region').classList.toggle('active', !!(cfg.region && cfg.region.enabled));
+  $('outline').classList.toggle('active', !!(cfg.region && cfg.region.showOutline));
 }
 
 // position the draggable outline over the stage from cfg.region (fractions)
@@ -526,10 +529,13 @@ async function pollLoop() {
     playState = { playing: !!s.playing, loop: !!s.loop, playPos: s.playPos || 0, canPlay: !!s.canPlay, file: s.file || null };
     updateTransport();
 
-    // reflect a region toggle made on the big screen (the "C" shortcut)
-    if (s.regionEnabled !== undefined && cfg.region && s.regionEnabled !== cfg.region.enabled) {
-      cfg.region.enabled = s.regionEnabled;
-      const cb = $('s-region'); if (cb) cb.checked = s.regionEnabled;
+    // reflect region toggles made on the big screen (the "C" / "O" shortcuts)
+    if (cfg.region && ((s.regionEnabled !== undefined && s.regionEnabled !== cfg.region.enabled) ||
+        (s.regionOutline !== undefined && s.regionOutline !== cfg.region.showOutline))) {
+      if (s.regionEnabled !== undefined) cfg.region.enabled = s.regionEnabled;
+      if (s.regionOutline !== undefined) cfg.region.showOutline = s.regionOutline;
+      const cb = $('s-region'); if (cb) cb.checked = cfg.region.enabled;
+      const cb2 = $('s-region-outline'); if (cb2) cb2.checked = cfg.region.showOutline;
       updateRegionBtn();
       positionRegionBox();
       if (!mirrorMode && !playState.playing) render();
@@ -586,9 +592,16 @@ async function init() {
   $('play').addEventListener('click', () => fetch(playState.playing ? '/api/pause' : '/api/play', { method: 'POST' }).catch(() => {}));
   $('loop').addEventListener('click', () => fetch('/api/loop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ loop: !playState.loop }) }).catch(() => {}));
   $('region').addEventListener('click', () => {
-    if (!cfg.region) cfg.region = { enabled: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+    if (!cfg.region) cfg.region = { enabled: false, showOutline: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
     cfg.region.enabled = !cfg.region.enabled;
     const cb = $('s-region'); if (cb) cb.checked = cfg.region.enabled;
+    updateRegionBtn();
+    applyLive();
+  });
+  $('outline').addEventListener('click', () => {
+    if (!cfg.region) cfg.region = { enabled: false, showOutline: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+    cfg.region.showOutline = !cfg.region.showOutline;
+    const cb = $('s-region-outline'); if (cb) cb.checked = cfg.region.showOutline;
     updateRegionBtn();
     applyLive();
   });

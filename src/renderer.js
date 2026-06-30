@@ -362,6 +362,17 @@ function draw() {
     g.restore();
   }
 
+  // region outline on the projection (alignment aid) — shown in any state
+  if (reg && reg.showOutline) {
+    g.save();
+    g.strokeStyle = wf.color;
+    g.globalAlpha = 0.6;
+    g.lineWidth = Math.max(1, 2 * dpr);
+    g.setLineDash([10 * dpr, 8 * dpr]);
+    g.strokeRect(geoL + dpr, regT + dpr, geoW - 2 * dpr, regH - 2 * dpr);
+    g.restore();
+  }
+
   const drawing = state === 'recording' || state === 'finishing' || state === 'done' || state === 'review';
   if (!drawing) return;
   const last = Math.min(numBins - 1, currentBin);
@@ -1003,7 +1014,8 @@ function pushState(extra) {
       compress: (state === 'review' || state === 'done') ? reviewCompress : (wf ? (wf.compress || 0) : 0),
       playing, loop: loopOn, playPos: playFrac,
       canPlay: !!reviewBytes && (state === 'review' || state === 'done'),
-      regionEnabled: !!(cfg && cfg.region && cfg.region.enabled)
+      regionEnabled: !!(cfg && cfg.region && cfg.region.enabled),
+      regionOutline: !!(cfg && cfg.region && cfg.region.showOutline)
     }, extra || {}));
   } catch (_) {}
 }
@@ -1012,6 +1024,15 @@ function pushState(extra) {
 function toggleRegion() {
   if (!cfg.region) cfg.region = { enabled: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
   cfg.region.enabled = !cfg.region.enabled;
+  if (screen === 'visualizer') draw();
+  pushState();
+  api.saveConfig(cfg).catch(() => {});
+}
+
+// toggle the region outline on the projection (from the big-screen "O" shortcut)
+function toggleRegionOutline() {
+  if (!cfg.region) cfg.region = { enabled: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+  cfg.region.showOutline = !cfg.region.showOutline;
   if (screen === 'visualizer') draw();
   pushState();
   api.saveConfig(cfg).catch(() => {});
@@ -1151,6 +1172,7 @@ async function init() {
     else if (e.code === 'KeyP') { e.preventDefault(); togglePlay(); }
     else if (e.code === 'KeyL') { e.preventDefault(); setLoop(!loopOn); }
     else if (e.code === 'KeyC') { e.preventDefault(); toggleRegion(); }
+    else if (e.code === 'KeyO') { e.preventDefault(); toggleRegionOutline(); }
     else if (e.code === 'Escape') { e.preventDefault(); exitToConfig(); }
   });
 
