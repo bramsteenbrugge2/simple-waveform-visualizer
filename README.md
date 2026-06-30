@@ -184,7 +184,9 @@ waveform canvas.
 
 ---
 
-## Packaging into a real app (optional)
+## Packaging into a real app
+
+Build installers locally (each on its own OS):
 
 ```bash
 npm run dist:win    # Windows installer (.exe / NSIS)  — run on Windows
@@ -198,6 +200,38 @@ directory instead (Windows: `%APPDATA%\Waveform Visualizer\`, macOS:
 the app writes there. Set an absolute `output.directory` to save recordings
 anywhere you like. The macOS microphone entitlement is configured in
 `build/entitlements.mac.plist`; code signing/notarization is not set up here.
+
+### Releases (Windows .exe + macOS .dmg)
+
+`.github/workflows/release.yml` builds both installers on GitHub Actions and
+attaches them to a GitHub Release. To cut a release, bump the version and push a
+matching tag:
+
+```bash
+npm version patch        # or: minor / major  (updates package.json + creates the tag)
+git push && git push --tags
+```
+
+The workflow runs on `windows-latest` (builds the `.exe`) and `macos-latest`
+(builds the `.dmg`), then publishes a Release for the tag with both files
+attached. You can also run it manually from the Actions tab. The macOS build is
+**unsigned**, so first launch needs right-click → Open (or
+`xattr -dr com.apple.quarantine` on the `.app`).
+
+### LAN access (use the web remote from your phone)
+
+With `web.lan: true` (default) the server listens on all interfaces and the
+settings screen shows your LAN URL, e.g. `http://192.168.1.118:8080`. On Windows
+you also need to allow inbound traffic through the firewall once:
+
+```powershell
+# run in an elevated PowerShell (Administrator)
+New-NetFirewallRule -DisplayName "Waveform Visualizer (8080)" `
+  -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080 -Profile Private,Domain
+```
+
+Then open the LAN URL on any device on the same network. Set `web.lan: false`
+(or untick **Allow LAN devices**) to restrict to this computer.
 
 ---
 
