@@ -47,6 +47,16 @@ module.exports = {
     color: "#7a8a90"
   },
 
+  // projection region: draw the waveform only inside a sub-rectangle of the screen
+  // (e.g. positioned over a person's body in a projection). Values are 0..1 fractions.
+  region: {
+    enabled: false,
+    x: 0.3,
+    y: 0.1,
+    width: 0.4,
+    height: 0.8
+  },
+
   web: {
     enabled: true,    // serve the interactive web remote / inspector
     port: 8080,

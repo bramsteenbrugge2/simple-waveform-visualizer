@@ -1,6 +1,6 @@
 {
   "name": "simple-waveform-visualizer",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Full-screen live audio recording waveform visualizer with a countdown timer.",
   "main": "src/main.js",
   "repository": {

@@ -61,10 +61,10 @@ function smoothPeaks(src, radius) {
   }
   return out;
 }
-// slider (0..1) -> radius px; gentle curve so ~75% matches the old linear 4%
+// slider (0..1) -> radius px; gentle curve, with extra headroom toward 100%
 function smoothRadiusFor(amount, bins) {
   const e = (amount || 0) * (amount || 0);
-  return Math.min(400, Math.round(e * bins * 0.0016));
+  return Math.min(900, Math.round(e * bins * 0.0034));
 }
 // log-ish peak compression (0..1 -> 0..1); 0 = linear
 function compressCurve(p, amount) {
@@ -88,16 +88,25 @@ function drawWave(ctx, rawPeaks, W, H, wf, scale, smooth, comp, bg, sx) {
   ctx.fillStyle = bg || '#000';
   ctx.fillRect(0, 0, W, H);
   const single = !!wf.singleSided;
-  const baseY = H / 2;
-  const maxAmp = (H / 2) * (wf.headroom || 0.9);
   const radius = smoothRadiusFor(smooth, rawPeaks.length);
   const peaks = radius > 0 ? smoothPeaks(rawPeaks, radius) : rawPeaks;
   const last = peaks.length - 1;
+  const n = peaks.length;
+
+  // optional projection region (mirrors the desktop) — fractions of the canvas
+  const reg = (cfg.region && cfg.region.enabled) ? cfg.region : null;
+  const geoL = reg ? Math.round(Math.min(Math.max(reg.x, 0), 1) * W) : 0;
+  const geoW = reg ? Math.max(2, Math.round(Math.min(Math.max(reg.width, 0.02), 1) * W)) : W;
+  const regT = reg ? Math.round(Math.min(Math.max(reg.y, 0), 1) * H) : 0;
+  const regH = reg ? Math.max(2, Math.round(Math.min(Math.max(reg.height, 0.02), 1) * H)) : H;
+  const baseY = regT + regH / 2;
+  const maxAmp = (regH / 2) * (wf.headroom || 0.9);
+  const xOf = (b) => geoL + (n > 1 ? (b / (n - 1)) * geoW : 0);
   const ampAt = (b) => { let a = compressCurve(peaks[b], comp || 0) * scale * maxAmp; return a > maxAmp ? maxAmp : a; };
 
   if (wf.showBaseline) {
     ctx.save(); ctx.globalAlpha = 0.12; ctx.strokeStyle = wf.color; ctx.lineWidth = Math.max(1, sx);
-    ctx.beginPath(); ctx.moveTo(0, baseY); ctx.lineTo(W, baseY); ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.moveTo(geoL, baseY); ctx.lineTo(geoL + geoW, baseY); ctx.stroke(); ctx.restore();
   }
   if (last < 0) return;
 
@@ -105,11 +114,13 @@ function drawWave(ctx, rawPeaks, W, H, wf, scale, smooth, comp, bg, sx) {
     ctx.save(); ctx.shadowColor = wf.color; ctx.shadowBlur = (wf.glow * 0.5) * sx; ctx.fillStyle = wf.color;
     const bw = Math.max(1, wf.barWidth * sx);
     const step = Math.max(bw + 1, (wf.barWidth + wf.barGap) * sx);
-    for (let x = 0; x <= last; x += step) {
-      let p = 0; const end = Math.min(last, Math.floor(x + step));
-      for (let b = Math.floor(x); b <= end; b++) if (peaks[b] > p) p = peaks[b];
+    const xEnd = xOf(last);
+    const binAt = (px) => Math.round((geoW > 0 ? (px - geoL) / geoW : 0) * (n - 1));
+    for (let px = geoL; px <= xEnd; px += step) {
+      let p = 0; const b0 = Math.max(0, binAt(px)); const b1 = Math.min(last, binAt(px + step));
+      for (let b = b0; b <= b1; b++) if (peaks[b] > p) p = peaks[b];
       let a = compressCurve(p, comp || 0) * scale * maxAmp; if (a > maxAmp) a = maxAmp; if (a < sx * 0.5) a = sx * 0.5;
-      if (single) ctx.fillRect(x, baseY - a, bw, a); else ctx.fillRect(x, baseY - a, bw, a * 2);
+      if (single) ctx.fillRect(px, baseY - a, bw, a); else ctx.fillRect(px, baseY - a, bw, a * 2);
     }
     ctx.restore();
   } else if (wf.style === 'filledGradient') {
@@ -119,26 +130,26 @@ function drawWave(ctx, rawPeaks, W, H, wf, scale, smooth, comp, bg, sx) {
       const grad = ctx.createLinearGradient(0, baseY - maxAmp, 0, baseY);
       grad.addColorStop(0, hexA(wf.color, 0.08)); grad.addColorStop(1, hexA(wf.color, 0.95));
       ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.moveTo(0, baseY);
-      for (let b = 0; b <= last; b++) ctx.lineTo(b, baseY - ampAt(b));
-      ctx.lineTo(last, baseY); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(geoL, baseY);
+      for (let b = 0; b <= last; b++) ctx.lineTo(xOf(b), baseY - ampAt(b));
+      ctx.lineTo(xOf(last), baseY); ctx.closePath(); ctx.fill();
     } else {
       const grad = ctx.createLinearGradient(0, baseY - maxAmp, 0, baseY + maxAmp);
       grad.addColorStop(0, hexA(wf.color, 0.05)); grad.addColorStop(0.5, hexA(wf.color, 0.95)); grad.addColorStop(1, hexA(wf.color, 0.05));
       ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.moveTo(0, baseY - ampAt(0));
-      for (let b = 1; b <= last; b++) ctx.lineTo(b, baseY - ampAt(b));
-      for (let b = last; b >= 0; b--) ctx.lineTo(b, baseY + ampAt(b));
+      ctx.beginPath(); ctx.moveTo(geoL, baseY - ampAt(0));
+      for (let b = 1; b <= last; b++) ctx.lineTo(xOf(b), baseY - ampAt(b));
+      for (let b = last; b >= 0; b--) ctx.lineTo(xOf(b), baseY + ampAt(b));
       ctx.closePath(); ctx.fill();
     }
     ctx.restore();
   } else {
     ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.shadowColor = wf.color; ctx.shadowBlur = wf.glow * sx; ctx.strokeStyle = wf.color;
     ctx.lineWidth = (wf.centerLineWidth || 1.5) * sx; ctx.globalAlpha = 0.85;
-    ctx.beginPath(); ctx.moveTo(0, baseY); ctx.lineTo(Math.max(0, last), baseY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(geoL, baseY); ctx.lineTo(xOf(Math.max(0, last)), baseY); ctx.stroke();
     ctx.globalAlpha = 1; ctx.lineWidth = (wf.lineWidth || 2.5) * sx;
-    ctx.beginPath(); for (let b = 0; b <= last; b++) { const y = baseY - ampAt(b); b ? ctx.lineTo(b, y) : ctx.moveTo(b, y); } ctx.stroke();
-    if (!single) { ctx.beginPath(); for (let b = 0; b <= last; b++) { const y = baseY + ampAt(b); b ? ctx.lineTo(b, y) : ctx.moveTo(b, y); } ctx.stroke(); }
+    ctx.beginPath(); for (let b = 0; b <= last; b++) { const y = baseY - ampAt(b); b ? ctx.lineTo(xOf(b), y) : ctx.moveTo(xOf(b), y); } ctx.stroke();
+    if (!single) { ctx.beginPath(); for (let b = 0; b <= last; b++) { const y = baseY + ampAt(b); b ? ctx.lineTo(xOf(b), y) : ctx.moveTo(xOf(b), y); } ctx.stroke(); }
     ctx.restore();
   }
 }
@@ -174,6 +185,7 @@ function recompute() {
 // ---------------- server I/O ----------------
 async function loadConfig() {
   try { const r = await fetch('/api/config'); const j = await r.json(); if (j.waveform) cfg = j; } catch (_) {}
+  if (!cfg.region) cfg.region = { enabled: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
   amplitude = (cfg.waveform && cfg.waveform.amplitudeScale) || 1;
   smoothing = (cfg.waveform && cfg.waveform.smoothing) || 0;
   compress = (cfg.waveform && cfg.waveform.compress) || 0;
@@ -310,6 +322,9 @@ function populateSettings() {
   sc('s-timershow', t.show !== false); sv('s-timerpos', t.position); sv('s-timersize', t.fontSize); sv('s-timercolor', t.color); sc('s-ms', t.showMilliseconds);
   sc('s-savewav', o.saveWav); sc('s-savepng', o.savePng); sv('s-dir', o.directory); sv('s-prefix', o.filenamePrefix); sc('s-subfolder', o.subfolderPerRecording);
   sv('s-bg', cfg.background);
+  const rg = cfg.region || {};
+  sc('s-region', rg.enabled); sv('s-rx', rg.x != null ? rg.x : 0.3); sv('s-ry', rg.y != null ? rg.y : 0.1);
+  sv('s-rw', rg.width != null ? rg.width : 0.4); sv('s-rh', rg.height != null ? rg.height : 0.8);
 }
 
 function buildConfig() {
@@ -344,6 +359,12 @@ function buildConfig() {
   out.output.directory = $('s-dir').value.trim() || './recordings';
   out.output.filenamePrefix = $('s-prefix').value.trim() || 'recording';
   out.output.subfolderPerRecording = $('s-subfolder').checked;
+  out.region = out.region || {};
+  out.region.enabled = $('s-region').checked;
+  out.region.x = +$('s-rx').value;
+  out.region.y = +$('s-ry').value;
+  out.region.width = +$('s-rw').value;
+  out.region.height = +$('s-rh').value;
   return out;
 }
 
@@ -371,7 +392,8 @@ function wireSettings() {
   settingsWired = true;
   const ids = ['s-duration', 's-device', 's-output', 's-channels', 's-samplerate', 's-style', 's-color', 's-glow',
     's-linewidth', 's-headroom', 's-baseline', 's-single', 's-timershow', 's-timerpos', 's-timersize',
-    's-timercolor', 's-ms', 's-savewav', 's-savepng', 's-dir', 's-prefix', 's-subfolder', 's-bg'];
+    's-timercolor', 's-ms', 's-savewav', 's-savepng', 's-dir', 's-prefix', 's-subfolder', 's-bg',
+    's-region', 's-rx', 's-ry', 's-rw', 's-rh'];
   ids.forEach((id) => { const el = $(id); if (el) { el.addEventListener('input', applyLive); el.addEventListener('change', applyLive); } });
 }
 
@@ -429,6 +451,10 @@ function updateTransport() {
   $('loop').classList.toggle('active', playState.loop);
 }
 
+function updateRegionBtn() {
+  $('region').classList.toggle('active', !!(cfg.region && cfg.region.enabled));
+}
+
 async function pollLoop() {
   let next = 600;
   try {
@@ -436,6 +462,14 @@ async function pollLoop() {
     updatePill(s);
     playState = { playing: !!s.playing, loop: !!s.loop, playPos: s.playPos || 0, canPlay: !!s.canPlay, file: s.file || null };
     updateTransport();
+
+    // reflect a region toggle made on the big screen (the "C" shortcut)
+    if (s.regionEnabled !== undefined && cfg.region && s.regionEnabled !== cfg.region.enabled) {
+      cfg.region.enabled = s.regionEnabled;
+      const cb = $('s-region'); if (cb) cb.checked = s.regionEnabled;
+      updateRegionBtn();
+      if (!mirrorMode && !playState.playing) render();
+    }
 
     // occasionally resync the config from the host (style/single-sided/etc. may
     // have been changed on the desktop) — but not while the drawer is being edited
@@ -466,6 +500,8 @@ async function pollLoop() {
 async function init() {
   canvas = $('wave'); g = canvas.getContext('2d');
   await loadConfig();
+  populateSettings();   // populate drawer fields so live config edits are accurate even before opening it
+  updateRegionBtn();
   await loadList();
 
   $('rec').addEventListener('change', (e) => selectFile(e.target.value));
@@ -483,6 +519,13 @@ async function init() {
   $('setdef').addEventListener('click', setDefault);
   $('play').addEventListener('click', () => fetch(playState.playing ? '/api/pause' : '/api/play', { method: 'POST' }).catch(() => {}));
   $('loop').addEventListener('click', () => fetch('/api/loop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ loop: !playState.loop }) }).catch(() => {}));
+  $('region').addEventListener('click', () => {
+    if (!cfg.region) cfg.region = { enabled: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+    cfg.region.enabled = !cfg.region.enabled;
+    const cb = $('s-region'); if (cb) cb.checked = cfg.region.enabled;
+    updateRegionBtn();
+    applyLive();
+  });
 
   $('btn-start').addEventListener('click', () => fetch('/api/start', { method: 'POST' }).catch(() => {}));
   $('btn-reset').addEventListener('click', () => fetch('/api/reset', { method: 'POST' }).catch(() => {}));

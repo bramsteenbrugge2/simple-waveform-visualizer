@@ -15,6 +15,7 @@ let canvas, g, dpr = 1, numBins = 0;
 let peakAbs;             // per-bin peak absolute amplitude (raw — never altered by visual controls)
 let renderPeaks;        // peakAbs after optional smoothing, used only for drawing
 let gainScale = 1;      // effective vertical scale used for the current draw
+let geoL = 0, geoW = 0; // horizontal extent (px) the waveform is drawn into (full width, or a region)
 
 // live visual overrides for a shown recording (review/done) — do NOT touch the
 // audio or the configured recording amplitude/smoothing
@@ -309,7 +310,7 @@ function smoothInto(src, radius, len) {
 // smooths and ~75% gives what the old linear 4% gave (per user calibration).
 function smoothRadius(amount, bins) {
   const e = amount * amount;
-  return Math.min(400, Math.round(e * bins * 0.0016));
+  return Math.min(900, Math.round(e * bins * 0.0034));
 }
 
 // log-ish compression of a normalized peak (0..1 -> 0..1); 0 = linear
@@ -328,16 +329,26 @@ function ampAt(b, maxAmp) {
   return scaledAmp(renderPeaks[b], maxAmp);
 }
 
+// map a bin index to its x pixel within the current drawing extent [geoL, geoL+geoW]
+function xOf(b) { return geoL + (numBins > 1 ? (b / (numBins - 1)) * geoW : 0); }
+
 function draw() {
   if (!canvas) return;
   const W = canvas.width, H = canvas.height;
-  const single = !!wf.singleSided;
-  // single-sided keeps the zero line centered and simply omits the bottom half
-  const baseY = H / 2;
-  const maxAmp = (H / 2) * wf.headroom;
 
   g.fillStyle = cfg.background;
   g.fillRect(0, 0, W, H);
+
+  // optional projection region — draw the waveform only inside a sub-rectangle
+  const reg = (cfg.region && cfg.region.enabled) ? cfg.region : null;
+  geoL = reg ? Math.round(clamp(reg.x, 0, 1) * W) : 0;
+  geoW = reg ? Math.max(2, Math.round(clamp(reg.width, 0.02, 1) * W)) : W;
+  const regT = reg ? Math.round(clamp(reg.y, 0, 1) * H) : 0;
+  const regH = reg ? Math.max(2, Math.round(clamp(reg.height, 0.02, 1) * H)) : H;
+
+  const single = !!wf.singleSided;
+  const baseY = regT + regH / 2;       // zero line stays centered (in the region)
+  const maxAmp = (regH / 2) * wf.headroom;
 
   if (wf.showBaseline) {
     g.save();
@@ -345,8 +356,8 @@ function draw() {
     g.strokeStyle = wf.color;
     g.lineWidth = Math.max(1, dpr);
     g.beginPath();
-    g.moveTo(0, baseY);
-    g.lineTo(W, baseY);
+    g.moveTo(geoL, baseY);
+    g.lineTo(geoL + geoW, baseY);
     g.stroke();
     g.restore();
   }
@@ -368,9 +379,9 @@ function draw() {
   else if (wf.style === 'filledGradient') drawFilled(baseY, maxAmp, last, single);
   else drawGlow(baseY, maxAmp, last, single);
 
-  // playback playhead (review/done only)
+  // playback playhead (review/done only) — within the region
   if (reviewing && (playing || playFrac > 0)) {
-    const x = Math.max(0, Math.min(W, playFrac * W));
+    const x = geoL + Math.max(0, Math.min(1, playFrac)) * geoW;
     g.save();
     g.strokeStyle = '#ffcf4a';
     g.shadowColor = '#ffcf4a';
@@ -378,8 +389,8 @@ function draw() {
     g.lineWidth = 2 * dpr;
     g.globalAlpha = 0.95;
     g.beginPath();
-    g.moveTo(x, 0);
-    g.lineTo(x, H);
+    g.moveTo(x, regT);
+    g.lineTo(x, regT + regH);
     g.stroke();
     g.restore();
   }
@@ -397,8 +408,8 @@ function drawGlow(baseY, maxAmp, last, single) {
   g.lineWidth = wf.centerLineWidth * dpr;
   g.globalAlpha = 0.85;
   g.beginPath();
-  g.moveTo(0, baseY);
-  g.lineTo(Math.max(0, last), baseY);
+  g.moveTo(geoL, baseY);
+  g.lineTo(xOf(Math.max(0, last)), baseY);
   g.stroke();
 
   // top envelope (+ bottom mirror unless single-sided)
@@ -407,14 +418,14 @@ function drawGlow(baseY, maxAmp, last, single) {
   g.beginPath();
   for (let b = 0; b <= last; b++) {
     const y = baseY - ampAt(b, maxAmp);
-    if (b === 0) g.moveTo(b, y); else g.lineTo(b, y);
+    if (b === 0) g.moveTo(xOf(b), y); else g.lineTo(xOf(b), y);
   }
   g.stroke();
   if (!single) {
     g.beginPath();
     for (let b = 0; b <= last; b++) {
       const y = baseY + ampAt(b, maxAmp);
-      if (b === 0) g.moveTo(b, y); else g.lineTo(b, y);
+      if (b === 0) g.moveTo(xOf(b), y); else g.lineTo(xOf(b), y);
     }
     g.stroke();
   }
@@ -431,9 +442,9 @@ function drawFilled(baseY, maxAmp, last, single) {
     grad.addColorStop(1, hexA(wf.color, 0.95));
     g.fillStyle = grad;
     g.beginPath();
-    g.moveTo(0, baseY);
-    for (let b = 0; b <= last; b++) g.lineTo(b, baseY - ampAt(b, maxAmp));
-    g.lineTo(last, baseY);
+    g.moveTo(geoL, baseY);
+    for (let b = 0; b <= last; b++) g.lineTo(xOf(b), baseY - ampAt(b, maxAmp));
+    g.lineTo(xOf(last), baseY);
     g.closePath();
     g.fill();
   } else {
@@ -443,9 +454,9 @@ function drawFilled(baseY, maxAmp, last, single) {
     grad.addColorStop(1, hexA(wf.color, 0.05));
     g.fillStyle = grad;
     g.beginPath();
-    g.moveTo(0, baseY - ampAt(0, maxAmp));
-    for (let b = 1; b <= last; b++) g.lineTo(b, baseY - ampAt(b, maxAmp));
-    for (let b = last; b >= 0; b--) g.lineTo(b, baseY + ampAt(b, maxAmp));
+    g.moveTo(geoL, baseY - ampAt(0, maxAmp));
+    for (let b = 1; b <= last; b++) g.lineTo(xOf(b), baseY - ampAt(b, maxAmp));
+    for (let b = last; b >= 0; b--) g.lineTo(xOf(b), baseY + ampAt(b, maxAmp));
     g.closePath();
     g.fill();
   }
@@ -459,15 +470,17 @@ function drawBars(baseY, maxAmp, last, single) {
   g.fillStyle = wf.color;
   const bw = Math.max(1, wf.barWidth * dpr);
   const step = Math.max(bw + 1, (wf.barWidth + wf.barGap) * dpr);
-  for (let x = 0; x <= last; x += step) {
+  const xEnd = xOf(last);
+  const binAt = (px) => Math.round((geoW > 0 ? (px - geoL) / geoW : 0) * (numBins - 1));
+  for (let px = geoL; px <= xEnd; px += step) {
     let p = 0;
-    // peak over the bar's whole time slice [x, x+step) so gap bins are not skipped
-    const end = Math.min(last, Math.floor(x + step));
-    for (let b = Math.floor(x); b <= end; b++) if (renderPeaks[b] > p) p = renderPeaks[b];
+    const b0 = Math.max(0, binAt(px));
+    const b1 = Math.min(last, binAt(px + step));
+    for (let b = b0; b <= b1; b++) if (renderPeaks[b] > p) p = renderPeaks[b];
     let a = scaledAmp(p, maxAmp);
     if (a < dpr * 0.5) a = dpr * 0.5;
-    if (single) g.fillRect(x, baseY - a, bw, a);
-    else g.fillRect(x, baseY - a, bw, a * 2);
+    if (single) g.fillRect(px, baseY - a, bw, a);
+    else g.fillRect(px, baseY - a, bw, a * 2);
   }
   g.restore();
 }
@@ -989,9 +1002,19 @@ function pushState(extra) {
       smoothing: (state === 'review' || state === 'done') ? reviewSmooth : (wf ? (wf.smoothing || 0) : 0),
       compress: (state === 'review' || state === 'done') ? reviewCompress : (wf ? (wf.compress || 0) : 0),
       playing, loop: loopOn, playPos: playFrac,
-      canPlay: !!reviewBytes && (state === 'review' || state === 'done')
+      canPlay: !!reviewBytes && (state === 'review' || state === 'done'),
+      regionEnabled: !!(cfg && cfg.region && cfg.region.enabled)
     }, extra || {}));
   } catch (_) {}
+}
+
+// toggle the projection region (from the big-screen "C" shortcut)
+function toggleRegion() {
+  if (!cfg.region) cfg.region = { enabled: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+  cfg.region.enabled = !cfg.region.enabled;
+  if (screen === 'visualizer') draw();
+  pushState();
+  api.saveConfig(cfg).catch(() => {});
 }
 
 // remote Start: begin a recording (transitions to full screen if needed)
@@ -1127,6 +1150,7 @@ async function init() {
     else if (e.code === 'KeyR') { e.preventDefault(); restartViz(); }
     else if (e.code === 'KeyP') { e.preventDefault(); togglePlay(); }
     else if (e.code === 'KeyL') { e.preventDefault(); setLoop(!loopOn); }
+    else if (e.code === 'KeyC') { e.preventDefault(); toggleRegion(); }
     else if (e.code === 'Escape') { e.preventDefault(); exitToConfig(); }
   });
 
