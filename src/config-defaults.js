@@ -52,6 +52,7 @@ module.exports = {
   region: {
     enabled: false,
     showOutline: false,   // draw the region's rectangle outline on the projection (for alignment)
+    markers: false,       // draw full-height vertical guide lines at the region's left/right edges
     x: 0.3,
     y: 0.1,
     width: 0.4,

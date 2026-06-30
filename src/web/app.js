@@ -185,7 +185,7 @@ function recompute() {
 // ---------------- server I/O ----------------
 async function loadConfig() {
   try { const r = await fetch('/api/config'); const j = await r.json(); if (j.waveform) cfg = j; } catch (_) {}
-  if (!cfg.region) cfg.region = { enabled: false, showOutline: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+  if (!cfg.region) cfg.region = { enabled: false, showOutline: false, markers: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
   amplitude = (cfg.waveform && cfg.waveform.amplitudeScale) || 1;
   smoothing = (cfg.waveform && cfg.waveform.smoothing) || 0;
   compress = (cfg.waveform && cfg.waveform.compress) || 0;
@@ -323,7 +323,7 @@ function populateSettings() {
   sc('s-savewav', o.saveWav); sc('s-savepng', o.savePng); sv('s-dir', o.directory); sv('s-prefix', o.filenamePrefix); sc('s-subfolder', o.subfolderPerRecording);
   sv('s-bg', cfg.background);
   const rg = cfg.region || {};
-  sc('s-region', rg.enabled); sc('s-region-outline', rg.showOutline);
+  sc('s-region', rg.enabled); sc('s-region-outline', rg.showOutline); sc('s-region-markers', rg.markers);
   sv('s-rx', rg.x != null ? rg.x : 0.3); sv('s-ry', rg.y != null ? rg.y : 0.1);
   sv('s-rw', rg.width != null ? rg.width : 0.4); sv('s-rh', rg.height != null ? rg.height : 0.8);
 }
@@ -363,6 +363,7 @@ function buildConfig() {
   out.region = out.region || {};
   out.region.enabled = $('s-region').checked;
   out.region.showOutline = $('s-region-outline').checked;
+  out.region.markers = $('s-region-markers').checked;
   out.region.x = +$('s-rx').value;
   out.region.y = +$('s-ry').value;
   out.region.width = +$('s-rw').value;
@@ -374,6 +375,7 @@ function buildConfig() {
 // so the full screen follows during a slider drag without hammering the disk)
 let _cfgLast = 0, _cfgTimer = 0;
 function applyLive() {
+  suppressSyncUntil = performance.now() + 1800; // protect this local change from a stale server echo
   cfg = buildConfig();
   render();
   positionRegionBox();
@@ -396,7 +398,7 @@ function wireSettings() {
   const ids = ['s-duration', 's-device', 's-output', 's-channels', 's-samplerate', 's-style', 's-color', 's-glow',
     's-linewidth', 's-headroom', 's-baseline', 's-single', 's-timershow', 's-timerpos', 's-timersize',
     's-timercolor', 's-ms', 's-savewav', 's-savepng', 's-dir', 's-prefix', 's-subfolder', 's-bg',
-    's-region', 's-region-outline', 's-rx', 's-ry', 's-rw', 's-rh'];
+    's-region', 's-region-outline', 's-region-markers', 's-rx', 's-ry', 's-rw', 's-rh'];
   ids.forEach((id) => { const el = $(id); if (el) { el.addEventListener('input', applyLive); el.addEventListener('change', applyLive); } });
 }
 
@@ -415,6 +417,7 @@ let lastState = '';
 let prevPlaying = false;
 let lastDrawnPos = -1;
 let cfgPollCount = 0;
+let suppressSyncUntil = 0; // ignore server-driven config/state for a moment after a local edit (avoids flip-back)
 function updatePill(s) {
   const pill = $('statepill');
   let label = 'Ready';
@@ -457,6 +460,7 @@ function updateTransport() {
 function updateRegionBtn() {
   $('region').classList.toggle('active', !!(cfg.region && cfg.region.enabled));
   $('outline').classList.toggle('active', !!(cfg.region && cfg.region.showOutline));
+  $('markers').classList.toggle('active', !!(cfg.region && cfg.region.markers));
 }
 
 // position the draggable outline over the stage from cfg.region (fractions)
@@ -529,13 +533,17 @@ async function pollLoop() {
     playState = { playing: !!s.playing, loop: !!s.loop, playPos: s.playPos || 0, canPlay: !!s.canPlay, file: s.file || null };
     updateTransport();
 
-    // reflect region toggles made on the big screen (the "C" / "O" shortcuts)
-    if (cfg.region && ((s.regionEnabled !== undefined && s.regionEnabled !== cfg.region.enabled) ||
-        (s.regionOutline !== undefined && s.regionOutline !== cfg.region.showOutline))) {
+    // reflect region toggles made on the big screen (C / O / M) — unless we just edited locally
+    if (performance.now() > suppressSyncUntil && cfg.region &&
+        ((s.regionEnabled !== undefined && s.regionEnabled !== cfg.region.enabled) ||
+         (s.regionOutline !== undefined && s.regionOutline !== cfg.region.showOutline) ||
+         (s.regionMarkers !== undefined && s.regionMarkers !== cfg.region.markers))) {
       if (s.regionEnabled !== undefined) cfg.region.enabled = s.regionEnabled;
       if (s.regionOutline !== undefined) cfg.region.showOutline = s.regionOutline;
+      if (s.regionMarkers !== undefined) cfg.region.markers = s.regionMarkers;
       const cb = $('s-region'); if (cb) cb.checked = cfg.region.enabled;
       const cb2 = $('s-region-outline'); if (cb2) cb2.checked = cfg.region.showOutline;
+      const cb3 = $('s-region-markers'); if (cb3) cb3.checked = cfg.region.markers;
       updateRegionBtn();
       positionRegionBox();
       if (!mirrorMode && !playState.playing) render();
@@ -543,8 +551,8 @@ async function pollLoop() {
 
     // occasionally resync the config from the host (style/single-sided/etc. may
     // have been changed on the desktop) — but not while the drawer is being edited
-    if (++cfgPollCount % 12 === 0 && !$('settings').classList.contains('open')) {
-      try { const j = await (await fetch('/api/config')).json(); if (j.waveform) { cfg = j; updateRegionBtn(); positionRegionBox(); if (!mirrorMode && !playState.playing) render(); } } catch (_) {}
+    if (++cfgPollCount % 12 === 0 && !$('settings').classList.contains('open') && performance.now() > suppressSyncUntil) {
+      try { const j = await (await fetch('/api/config')).json(); if (j.waveform) { cfg = j; populateSettings(); updateRegionBtn(); positionRegionBox(); if (!mirrorMode && !playState.playing) render(); } } catch (_) {}
     }
 
     const live = s.state === 'recording' || s.state === 'finishing';
@@ -592,16 +600,23 @@ async function init() {
   $('play').addEventListener('click', () => fetch(playState.playing ? '/api/pause' : '/api/play', { method: 'POST' }).catch(() => {}));
   $('loop').addEventListener('click', () => fetch('/api/loop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ loop: !playState.loop }) }).catch(() => {}));
   $('region').addEventListener('click', () => {
-    if (!cfg.region) cfg.region = { enabled: false, showOutline: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+    if (!cfg.region) cfg.region = { enabled: false, showOutline: false, markers: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
     cfg.region.enabled = !cfg.region.enabled;
     const cb = $('s-region'); if (cb) cb.checked = cfg.region.enabled;
     updateRegionBtn();
     applyLive();
   });
   $('outline').addEventListener('click', () => {
-    if (!cfg.region) cfg.region = { enabled: false, showOutline: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+    if (!cfg.region) cfg.region = { enabled: false, showOutline: false, markers: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
     cfg.region.showOutline = !cfg.region.showOutline;
     const cb = $('s-region-outline'); if (cb) cb.checked = cfg.region.showOutline;
+    updateRegionBtn();
+    applyLive();
+  });
+  $('markers').addEventListener('click', () => {
+    if (!cfg.region) cfg.region = { enabled: false, showOutline: false, markers: false, x: 0.3, y: 0.1, width: 0.4, height: 0.8 };
+    cfg.region.markers = !cfg.region.markers;
+    const cb = $('s-region-markers'); if (cb) cb.checked = cfg.region.markers;
     updateRegionBtn();
     applyLive();
   });
