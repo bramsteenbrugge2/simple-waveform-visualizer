@@ -304,7 +304,13 @@ ipcMain.handle('open-external', async (_e, url) => { if (url) await shell.openEx
 
 ipcMain.handle('set-fullscreen', (e, flag) => {
   const w = BrowserWindow.fromWebContents(e.sender);
-  if (w) w.setFullScreen(!!flag);
+  if (w) {
+    // On macOS, native fullscreen uses a separate Space where the menu bar
+    // reveals on hover. "Simple" fullscreen covers the menu bar + Dock fully.
+    if (process.platform === 'darwin') w.setSimpleFullScreen(!!flag);
+    else w.setFullScreen(!!flag);
+    if (!w.isDestroyed()) w.webContents.send('layout-changed');
+  }
   return true;
 });
 
