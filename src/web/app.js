@@ -374,6 +374,7 @@ let _cfgLast = 0, _cfgTimer = 0;
 function applyLive() {
   cfg = buildConfig();
   render();
+  positionRegionBox();
   const flush = async () => {
     _cfgLast = performance.now();
     try {
@@ -455,6 +456,68 @@ function updateRegionBtn() {
   $('region').classList.toggle('active', !!(cfg.region && cfg.region.enabled));
 }
 
+// position the draggable outline over the stage from cfg.region (fractions)
+function positionRegionBox() {
+  const box = $('region-box');
+  if (!box) return;
+  const on = !!(cfg.region && cfg.region.enabled);
+  box.hidden = !on;
+  if (!on) return;
+  const r = cfg.region;
+  box.style.left = (r.x * 100) + '%';
+  box.style.top = (r.y * 100) + '%';
+  box.style.width = (r.width * 100) + '%';
+  box.style.height = (r.height * 100) + '%';
+}
+
+// apply a dragged region: clamp, sync the drawer sliders, persist + mirror live
+function applyRegion(r) {
+  r.width = Math.max(0.05, Math.min(1, r.width));
+  r.height = Math.max(0.05, Math.min(1, r.height));
+  r.x = Math.max(0, Math.min(1 - r.width, r.x));
+  r.y = Math.max(0, Math.min(1 - r.height, r.y));
+  const set = (id, v) => { const e = $(id); if (e) e.value = v; };
+  set('s-rx', r.x); set('s-ry', r.y); set('s-rw', r.width); set('s-rh', r.height);
+  const cb = $('s-region'); if (cb) cb.checked = true;
+  applyLive(); // cfg = buildConfig() reads the synced sliders, then persists + mirrors
+}
+
+function setupRegionDrag() {
+  const box = $('region-box');
+  if (!box) return;
+  let drag = null;
+  box.addEventListener('pointerdown', (e) => {
+    if (!cfg.region || !cfg.region.enabled) return;
+    const cls = typeof e.target.className === 'string' ? e.target.className : '';
+    const m = /\b(nw|ne|sw|se)\b/.exec(cls);
+    const stage = box.parentElement.getBoundingClientRect();
+    drag = { mode: m ? m[1] : 'move', sx: e.clientX, sy: e.clientY, sw: stage.width, sh: stage.height, r0: Object.assign({}, cfg.region) };
+    try { box.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = (e.clientX - drag.sx) / drag.sw;
+    const dy = (e.clientY - drag.sy) / drag.sh;
+    const r0 = drag.r0;
+    let r;
+    if (drag.mode === 'move') {
+      r = { x: r0.x + dx, y: r0.y + dy, width: r0.width, height: r0.height };
+    } else {
+      let x0 = r0.x, y0 = r0.y, x1 = r0.x + r0.width, y1 = r0.y + r0.height;
+      if (drag.mode.indexOf('w') >= 0) x0 = Math.min(x1 - 0.05, Math.max(0, r0.x + dx));
+      if (drag.mode.indexOf('e') >= 0) x1 = Math.max(x0 + 0.05, Math.min(1, r0.x + r0.width + dx));
+      if (drag.mode.indexOf('n') >= 0) y0 = Math.min(y1 - 0.05, Math.max(0, r0.y + dy));
+      if (drag.mode.indexOf('s') >= 0) y1 = Math.max(y0 + 0.05, Math.min(1, r0.y + r0.height + dy));
+      r = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+    }
+    applyRegion(r);
+  });
+  const end = (e) => { if (drag) { try { box.releasePointerCapture(e.pointerId); } catch (_) {} drag = null; } };
+  box.addEventListener('pointerup', end);
+  box.addEventListener('pointercancel', end);
+}
+
 async function pollLoop() {
   let next = 600;
   try {
@@ -468,13 +531,14 @@ async function pollLoop() {
       cfg.region.enabled = s.regionEnabled;
       const cb = $('s-region'); if (cb) cb.checked = s.regionEnabled;
       updateRegionBtn();
+      positionRegionBox();
       if (!mirrorMode && !playState.playing) render();
     }
 
     // occasionally resync the config from the host (style/single-sided/etc. may
     // have been changed on the desktop) — but not while the drawer is being edited
     if (++cfgPollCount % 12 === 0 && !$('settings').classList.contains('open')) {
-      try { const j = await (await fetch('/api/config')).json(); if (j.waveform) { cfg = j; if (!mirrorMode && !playState.playing) render(); } } catch (_) {}
+      try { const j = await (await fetch('/api/config')).json(); if (j.waveform) { cfg = j; updateRegionBtn(); positionRegionBox(); if (!mirrorMode && !playState.playing) render(); } } catch (_) {}
     }
 
     const live = s.state === 'recording' || s.state === 'finishing';
@@ -502,6 +566,8 @@ async function init() {
   await loadConfig();
   populateSettings();   // populate drawer fields so live config edits are accurate even before opening it
   updateRegionBtn();
+  setupRegionDrag();
+  positionRegionBox();
   await loadList();
 
   $('rec').addEventListener('change', (e) => selectFile(e.target.value));
