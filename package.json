@@ -1,6 +1,6 @@
 {
   "name": "simple-waveform-visualizer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Full-screen live audio recording waveform visualizer with a countdown timer.",
   "main": "src/main.js",
   "repository": {
@@ -34,6 +34,10 @@
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "perMachine": true,
+      "include": "build/installer.nsh"
     },
     "mac": {
       "target": [
