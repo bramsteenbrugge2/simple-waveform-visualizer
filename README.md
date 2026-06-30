@@ -221,17 +221,23 @@ attached. You can also run it manually from the Actions tab. The macOS build is
 ### LAN access (use the web remote from your phone)
 
 With `web.lan: true` (default) the server listens on all interfaces and the
-settings screen shows your LAN URL, e.g. `http://192.168.1.118:8080`. On Windows
-you also need to allow inbound traffic through the firewall once:
+settings screen shows your LAN URL, e.g. `http://192.168.1.118:8080`. Open that
+URL on any device on the same network. Set `web.lan: false` (or untick **Allow
+LAN devices**) to restrict to this computer.
 
-```powershell
-# run in an elevated PowerShell (Administrator)
-New-NetFirewallRule -DisplayName "Waveform Visualizer (8080)" `
-  -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080 -Profile Private,Domain
-```
+**Firewall:**
+- The **installed Windows app** adds the inbound firewall rule automatically at
+  install time (the installer is elevated for this), so the LAN URL just works.
+- When running **from source** (`npm start`) on Windows, allow it once — either
+  click *Allow access* on the first-run firewall prompt, or run in an elevated
+  PowerShell:
 
-Then open the LAN URL on any device on the same network. Set `web.lan: false`
-(or untick **Allow LAN devices**) to restrict to this computer.
+  ```powershell
+  New-NetFirewallRule -DisplayName "Waveform Visualizer (8080)" `
+    -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080 -Profile Private,Domain
+  ```
+- **macOS** allows inbound LAN connections by default; if you've enabled the
+  macOS firewall, allow incoming connections for the app once.
 
 ---
 
